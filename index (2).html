@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TONDA // Matrix Intelligence</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+
+  :root {
+    --green: #00ff41;
+    --dark-green: #008f11;
+    --dim-green: #003b00;
+    --red: #ff3030;
+    --amber: #ffaa00;
+    --bg: #020d02;
+    --glow: 0 0 8px #00ff41, 0 0 20px #00ff4155;
+    --glow-strong: 0 0 12px #00ff41, 0 0 40px #00ff4188, 0 0 80px #00ff4133;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--green);
+    font-family: 'Share Tech Mono', monospace;
+    height: 100vh;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+
+  #matrix-canvas {
+    position: fixed; top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 0; opacity: 0.15;
+  }
+
+  body::after {
+    content: '';
+    position: fixed; inset: 0;
+    background: repeating-linear-gradient(0deg, transparent, transparent 2px, rgba(0,0,0,0.07) 2px, rgba(0,0,0,0.07) 4px);
+    pointer-events: none; z-index: 100;
+  }
+
+  .container {
+    position: relative; z-index: 10;
+    width: min(720px, 97vw); height: 90vh;
+    display: flex; flex-direction: column;
+    border: 1px solid var(--dark-green);
+    background: rgba(2, 13, 2, 0.93);
+    box-shadow: var(--glow-strong), inset 0 0 80px rgba(0,255,65,0.02);
+  }
+
+  .container::before, .container::after {
+    content: ''; position: absolute;
+    width: 20px; height: 20px;
+    border-color: var(--green); border-style: solid; z-index: 20;
+  }
+  .container::before { top: -1px; left: -1px; border-width: 2px 0 0 2px; }
+  .container::after  { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; }
+
+  /* HEADER */
+  .header {
+    padding: 12px 20px 10px;
+    border-bottom: 1px solid var(--dim-green);
+    display: flex; align-items: center; gap: 14px; flex-shrink: 0;
+  }
+  .header-title {
+    font-family: 'Orbitron', monospace;
+    font-size: clamp(12px, 2.4vw, 17px);
+    font-weight: 900; letter-spacing: 5px;
+    text-shadow: var(--glow);
+    animation: flicker 8s infinite;
+  }
+  .header-sub { font-size: 9px; color: var(--dark-green); letter-spacing: 2px; margin-top: 3px; }
+  .status-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--green); box-shadow: var(--glow);
+    animation: pulse 2s infinite; flex-shrink: 0;
+  }
+  .header-right { margin-left: auto; font-size: 9px; color: var(--dark-green); text-align: right; line-height: 1.7; }
+  .header-right span { color: var(--amber); }
+
+  /* KNOWLEDGE BAR */
+  .kb-bar {
+    border-bottom: 1px solid var(--dim-green);
+    padding: 5px 20px;
+    font-size: 9px; color: var(--dark-green);
+    display: flex; gap: 20px; flex-shrink: 0;
+    background: rgba(0,10,0,0.4);
+  }
+  .kb-bar b { color: var(--green); }
+
+  /* CHAT */
+  #chat {
+    flex: 1; overflow-y: auto;
+    padding: 14px 18px;
+    display: flex; flex-direction: column; gap: 8px;
+    scroll-behavior: smooth;
+  }
+  #chat::-webkit-scrollbar { width: 3px; }
+  #chat::-webkit-scrollbar-thumb { background: var(--dim-green); }
+
+  .msg {
+    display: flex; flex-direction: column; gap: 2px;
+    animation: fadeIn 0.2s ease; max-width: 90%;
+  }
+  .msg.user { align-self: flex-end; align-items: flex-end; }
+  .msg.bot  { align-self: flex-start; align-items: flex-start; }
+  .msg.system { align-self: center; max-width: 100%; width: 100%; }
+
+  .msg-label { font-size: 8px; letter-spacing: 2px; color: var(--dark-green); }
+
+  .msg-bubble {
+    padding: 8px 13px; font-size: 12.5px; line-height: 1.6;
+    border: 1px solid; position: relative;
+  }
+  .msg.user .msg-bubble {
+    border-color: var(--dark-green); background: rgba(0,143,17,0.07);
+    color: var(--green);
+    clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 0 100%);
+  }
+  .msg.bot .msg-bubble {
+    border-color: var(--green); background: rgba(0,255,65,0.04);
+    color: var(--green); text-shadow: 0 0 5px #00ff4144;
+    clip-path: polygon(8px 0, 100% 0, 100% 100%, 0 100%, 0 8px);
+  }
+  .msg.bot.critical .msg-bubble {
+    border-color: var(--amber); color: var(--amber);
+    text-shadow: 0 0 5px #ffaa0044;
+  }
+  .msg.system .msg-bubble {
+    border: none; background: transparent;
+    color: var(--dim-green); font-size: 10px; text-align: center;
+    clip-path: none; width: 100%;
+  }
+
+  /* CONFIDENCE */
+  .confidence-bar {
+    height: 2px; width: 100%; background: var(--dim-green); margin-top: 3px;
+    border-radius: 1px; overflow: hidden;
+  }
+  .confidence-fill { height: 100%; background: var(--green); transition: width 0.4s; }
+
+  /* INPUT */
+  .input-area {
+    border-top: 1px solid var(--dim-green);
+    padding: 10px 15px;
+    display: flex; gap: 10px; align-items: center;
+    flex-shrink: 0; background: rgba(0,15,0,0.5);
+  }
+  .prompt-prefix { color: var(--green); font-size: 13px; flex-shrink: 0; text-shadow: var(--glow); }
+  #user-input {
+    flex: 1; background: transparent; border: none; outline: none;
+    color: var(--green); font-family: 'Share Tech Mono', monospace;
+    font-size: 13px; caret-color: var(--green);
+  }
+  #user-input::placeholder { color: var(--dim-green); }
+  #send-btn {
+    background: transparent; border: 1px solid var(--dark-green);
+    color: var(--green); font-family: 'Orbitron', monospace;
+    font-size: 9px; letter-spacing: 2px; padding: 6px 12px;
+    cursor: pointer; transition: all 0.2s;
+    clip-path: polygon(4px 0, 100% 0, 100% calc(100% - 4px), calc(100% - 4px) 100%, 0 100%, 0 4px);
+  }
+  #send-btn:hover { background: rgba(0,255,65,0.1); border-color: var(--green); box-shadow: var(--glow); }
+
+  /* LEARN */
+  .learn-prompt {
+    border: 1px solid var(--amber); background: rgba(20,15,0,0.7);
+    padding: 9px 14px; font-size: 11px;
+    display: flex; align-items: center; gap: 10px;
+    flex-shrink: 0; border-left: 3px solid var(--amber);
+  }
+  .learn-prompt span { color: var(--amber); font-size: 10px; white-space: nowrap; }
+  .learn-prompt input {
+    flex: 1; background: transparent; border: none; outline: none;
+    border-bottom: 1px solid var(--amber); color: var(--amber);
+    font-family: 'Share Tech Mono', monospace; font-size: 12px; padding-bottom: 2px;
+  }
+  .learn-prompt button {
+    background: rgba(255,170,0,0.1); border: 1px solid var(--amber);
+    color: var(--amber); font-family: 'Share Tech Mono', monospace;
+    font-size: 10px; padding: 4px 10px; cursor: pointer; transition: all 0.2s;
+    white-space: nowrap;
+  }
+  .learn-prompt button:hover { background: rgba(255,170,0,0.2); }
+
+  /* TYPING */
+  .typing-indicator { display: flex; gap: 5px; padding: 8px 13px; }
+  .typing-indicator span {
+    width: 5px; height: 5px; background: var(--green); border-radius: 50%;
+    animation: typingDot 1.2s infinite;
+  }
+  .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+  .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+
+  @keyframes fadeIn { from { opacity:0; transform:translateY(5px); } to { opacity:1; transform:translateY(0); } }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:0.4;transform:scale(0.75);} }
+  @keyframes flicker { 0%,94%,100%{opacity:1;} 95%{opacity:0.3;} 96%{opacity:1;} 97%{opacity:0.5;} 98%{opacity:1;} }
+  @keyframes typingDot { 0%,80%,100%{opacity:0.15;transform:scale(0.7);} 40%{opacity:1;transform:scale(1);} }
+</style>
+</head>
+<body>
+<canvas id="matrix-canvas"></canvas>
+
+<div class="container">
+  <div class="header">
+    <div class="status-dot"></div>
+    <div>
+      <div class="header-title">T O N D A</div>
+      <div class="header-sub">CRITICAL INTELLIGENCE SYSTEM v3.0</div>
+    </div>
+    <div class="header-right">
+      <div>WAKE UP, DOMINIK...</div>
+      <div id="clock">--:--:--</div>
+      <div>ZNALOSTÍ: <span id="kb-count">0</span></div>
+    </div>
+  </div>
+
+  <div class="kb-bar">
+    <span>SYS: ANALYTICKÝ MÓD</span>
+    <span>PAMĚŤ: <b id="mem-facts">0</b> FAKTŮ</span>
+    <span>NAUČENÉ: <b id="learned-count">0</b></span>
+    <span>DOTAZŮ: <b id="query-count">0</b></span>
+  </div>
+
+  <div id="chat"></div>
+
+  <div id="learn-area" style="display:none" class="learn-prompt">
+    <span>▶ NAUČIT TONDA:</span>
+    <input id="learn-input" type="text" placeholder="Co by měl Tonda odpovědět?" />
+    <button id="learn-btn">ZAPSAT DO PAMĚTI</button>
+  </div>
+
+  <div class="input-area">
+    <span class="prompt-prefix">DOMINIK:~$</span>
+    <input id="user-input" type="text" placeholder="Zeptej se na Matrix nebo cokoliv jiného..." autocomplete="off" />
+    <button id="send-btn">SEND</button>
+  </div>
+</div>
+
+<script>
+// ─── MATRIX RAIN ───────────────────────────────────────────────────────────
+const canvas = document.getElementById('matrix-canvas');
+const ctx = canvas.getContext('2d');
+let drops = [];
+function resizeCanvas() {
+  canvas.width = window.innerWidth; canvas.height = window.innerHeight;
+  drops = Array(Math.floor(canvas.width / 14)).fill(1);
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+const chars = 'アイウエオカキクサシスセタチツナニヌ0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ@#$%&';
+function drawMatrix() {
+  ctx.fillStyle = 'rgba(2,13,2,0.05)'; ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.fillStyle = '#00ff41'; ctx.font = '13px Share Tech Mono';
+  drops.forEach((y,i) => {
+    const ch = chars[Math.floor(Math.random()*chars.length)];
+    ctx.globalAlpha = Math.random()>0.95?1:0.45;
+    ctx.fillText(ch, i*14, y*14);
+    ctx.globalAlpha = 1;
+    if (y*14 > canvas.height && Math.random()>0.975) drops[i]=0;
+    drops[i]++;
+  });
+}
+setInterval(drawMatrix, 50);
+
+// ─── CLOCK ──────────────────────────────────────────────────────────────────
+function updateClock() {
+  const n = new Date();
+  document.getElementById('clock').textContent =
+    [n.getHours(),n.getMinutes(),n.getSeconds()].map(x=>String(x).padStart(2,'0')).join(':');
+}
+setInterval(updateClock,1000); updateClock();
+
+// ─── KNOWLEDGE BASE ─────────────────────────────────────────────────────────
+// Každý fakt má: klíčová slova (array), obsah (text), tagy (pro kombinování), typ
+const KB = [
+  // ── FILM – ZÁKLADNÍ ──
+  { id:'matrix_co',    keys:['matrix','co je','co to je','vysvětli','popiš'],
+    tags:['film','základní','simulace'],
+    text:'Matrix je simulace reality – počítačový program spuštěný stroji, aby udržel lidstvo v klidu, zatímco jim odebírají biologickou energii. Lidé jsou fakticky baterie.' },
+  { id:'matrix_rok',   keys:['1999','kdy','datum','vydán','vyšel','rok'],
+    tags:['film','základní','datum'],
+    text:'První Matrix vyšel 31. března 1999. Tehdy šokoval svět vizuálním zpracováním i filozofickým obsahem.' },
+  { id:'matrix_serie', keys:['díly','části','kolik','série','filmy','trilogie'],
+    tags:['film','základní','série'],
+    text:'Matrix má čtyři filmy: Matrix (1999), Reloaded (2003), Revolutions (2003) a Resurrections (2021). Trilogie plus pozdější pokračování s rozporuplným přijetím.' },
+
+  // ── TVŮRCI ──
+  { id:'wachowski',    keys:['wachowski','režie','kdo točil','režisér','tvůrce','natočil'],
+    tags:['tvůrci','film'],
+    text:'Matrix natočily sestry Wachowské – Lana a Lilly. V době natáčení první trilogie ještě vystupovaly jako bratři Andy a Larry Wachowski, jejich přerod je sám o sobě příběh o hledání vlastní identity.' },
+  { id:'inspirace',    keys:['inspirace','odkud','vznik','nápad','původ','filozofie'],
+    tags:['tvůrci','filozofie'],
+    text:'Wachowské se nechaly inspirovat simulacrtí teorií Jeana Baudrillarda (Simulacra and Simulation), gnosticismem, Platónovou alegorií jeskyně a kybernetickými romány Williama Gibsona. Film není jen akce – je to filozofická esej v přestrojení.' },
+
+  // ── HERCI ──
+  { id:'neo',          keys:['neo','thomas anderson','keanu','reeves','vyvolený','protagonista','hlavní hrdina'],
+    tags:['herci','postavy','neo'],
+    text:'Nea hraje Keanu Reeves. Thomas Anderson je průměrný programátor, ve skutečnosti Neo – Vyvolený schopný překodat pravidla Matrixu. Keanu roli přijal poté, co ji odmítl Will Smith.' },
+  { id:'morpheus',     keys:['morpheus','fishburne','laurence','vůdce','kapitán','červená pilulka'],
+    tags:['herci','postavy','morpheus'],
+    text:'Morphea hraje Laurence Fishburne. Je to kapitán Nabuchadnezzara, fanaticky věřící v proroctví o Vyvoleném. Kriticky řečeno: Morpheus je charismatický, ale riskuje životy ostatních kvůli své víře.' },
+  { id:'trinity',      keys:['trinity','carrie','anne moss','láska','pilot'],
+    tags:['herci','postavy','trinity'],
+    text:'Trinity hraje Carrie-Anne Moss. Nekompromisní operativec a Neova láska. Ironicky, Oracle věštila, že Trinity se zamiluje do Vyvoleného – což znamená, že jejich vztah byl možná od začátku determinován simulací.' },
+  { id:'smith',        keys:['smith','agent','hugo','weaving','záporák','antagonista','virus'],
+    tags:['herci','postavy','smith'],
+    text:'Agent Smithe hraje Hugo Weaving. Původně dozorce systému, Smith se po konfrontaci s Neem vymkl kontrole a stal se nezávislým virem. Paradoxně sdílí s Neem víc, než by oba přiznali – oba jsou anomálie systému.' },
+  { id:'oracle',       keys:['oracle','věštkyně','gloria','foster','cookie','proroctví'],
+    tags:['postavy','oracle','filozofie'],
+    text:'Oracle hraje Gloria Foster. Prezentuje se jako věštkyně, ale ve skutečnosti je sofistikovaný program navržený pochopit lidskou psychiku. Říká lidem to, co potřebují slyšet – ne nutně pravdu. Je manipulativní, i když benigně.' },
+  { id:'architekt',    keys:['architekt','tvůrce','systém','logika','kontrola','počítač'],
+    tags:['postavy','architekt','filozofie'],
+    text:'Architekt je tvůrce Matrixu – chladný, logický program. Sděluje Neovi, že Vyvolený je ve skutečnosti součástí systému, ne jeho hrozbou. Matrix byl redesignován šestkrát. Neo je šestá iterace anomálie.' },
+  { id:'merovingian',  keys:['merovingian','frančíz','frankie','francouz','exil','program'],
+    tags:['postavy','exilové programy'],
+    text:'Merovingian je exilový program, který odmítl být vymazán. Ovládá informace a kauzalitu. Jeho filozofie: kauzalita je jediná skutečná moc, vůle je iluze. Cynicky pravdivé ve světě, kde je vše kód.' },
+
+  // ── KLÍČOVÉ KONCEPTY ──
+  { id:'pilulky',      keys:['pilulka','červená','modrá','volba','probuzení','iluze'],
+    tags:['koncepty','filozofie'],
+    text:'Červená pilulka = probuzení do kruté reality. Modrá = návrat do pohodlné iluze. Ale je to opravdu volba? Morfeus ji předkládá Neovi, který ji vlastně nikdy neměl šanci odmítnout – byl k tomu celý život veden.' },
+  { id:'bullet_time',  keys:['bullet time','zpomalení','kamera','efekt','akce','vizuální'],
+    tags:['technika','film'],
+    text:'Bullet time je filmová technika, kdy desítky kamer obklopí objekt a výsledek simuluje pohyb kamery kolem „zamrzlé" scény. Ve filmu slouží k vizualizaci Neovy schopnosti přepsat fyziku Matrixu.' },
+  { id:'zion',         keys:['zion','město','lidé','podzemí','útočiště','poslední'],
+    tags:['svět','reálný svět'],
+    text:'Zion je poslední lidské město, ukryté 2000 metrů pod povrchem Země. V Reloaded se ukáže, že Zion sám je součástí systému – strategie strojů, jak kontrolovat i ty, kdo „unikli".' },
+  { id:'kod',          keys:['kód','zelený','padající','znaky','japonský','sushi'],
+    tags:['vizuální','film'],
+    text:'Padající zelený kód je ikonická vizuální metafora Matrixu. Grafik Simon Whiteley ho navrhl z japonských receptů na sushi zakódovaných do ASCII. Sám říká: kdykoli to vidím, myslím na sushi.' },
+  { id:'nebuchadnezzar', keys:['nebuchadnezzar','nabuchadnezzar','loď','hovercraft','posádka'],
+    tags:['svět','reálný svět'],
+    text:'Nabuchadnezzar (Mark III No. 11) je vzdušná loď Morpheovy posádky. Pohybuje se v kanálech pod zemí. Na trupu nese biblický nápis – Morpheova posádka věří v proroctví skoro nábožensky.' },
+  { id:'sentinel',     keys:['sentinel','sentinelé','chobotnice','stroje','loviči'],
+    tags:['svět','stroje'],
+    text:'Sentinelé jsou autonomní bojové stroje strojů – "chobotnice" s četnými chapadly. Hledají a ničí vzdušné lodě lidí. Jsou symbolem nevyhnutelnosti: systém, který tě vždy dožene.' },
+  { id:'emp',          keys:['emp','impuls','elektromagnetický','zbraň','útok'],
+    tags:['svět','zbraně'],
+    text:'EMP – elektromagnetický impuls – je jediná zbraň lidí proti strojům. Problém: vyřadí i vlastní loď. Jednorázová zbraň naprosté zoufalosti.' },
+  { id:'hardline',     keys:['hardline','telefonní','únik','telefon','linka'],
+    tags:['koncepty','svět'],
+    text:'Hardline je pevná telefonní linka – jediný bezpečný únikový bod z Matrixu. Mobilní signály stroje monitorují. Bez hardline uvízneš uvnitř – proto Agent Smith telefony cíleně ničí.' },
+  { id:'dejavu',       keys:['déjà vu','opakování','chyba','cat','kočka'],
+    tags:['koncepty','film'],
+    text:'Déjà vu v Matrixu není pocit – je to doslova chyba v kódu. Indikuje, že Matrix právě přepsal část prostředí. "They changed something." Geniálně jednoduchá expozice komplexního konceptu.' },
+  { id:'vyvoleny',     keys:['vyvolený','the one','proroctví','anomálie','systém'],
+    tags:['koncepty','filozofie','neo'],
+    text:'Vyvolený je ve skutečnosti systémová anomálie – odchylka, která musí být periodicky resetována. Architekt to Neovi přímo řekne v Reloaded. Celé proroctví je nástroj kontroly, ne osvobození.' },
+
+  // ── TECHNICKÉ A PRODUKCE ──
+  { id:'nataceni',     keys:['natáčení','kde','sydney','austrálie','lokace','produkce'],
+    tags:['produkce','film'],
+    text:'Matrix byl natočen převážně v Sydney, Austrálie, v roce 1998. Fox Studios poskytly infrastrukturu. Austrálie tehdy nabízela nižší náklady a výborné technické zázemí.' },
+  { id:'rozpocet',     keys:['rozpočet','peníze','tržby','vydělal','kasa','box office'],
+    tags:['produkce','čísla'],
+    text:'Rozpočet prvního Matrixu byl 63 milionů dolarů. Celosvětové tržby překročily 463 milionů. Investice se vrátila 7×. Warner Bros. původně chtěli menší film – Wachowské si vymohly plný budget.' },
+  { id:'oscary',       keys:['oscar','ocenění','cena','akademie','střih','efekty'],
+    tags:['produkce','ocenění'],
+    text:'Matrix získal 4 Oscary (2000): za filmový střih, zvukový střih, zvukový mix a vizuální efekty. Nominace na 4 technické kategorie a vyhral všechny. Akademie nemohla ignorovat technologický skok.' },
+  { id:'soundtrack',   keys:['hudba','soundtrack','don davis','rage','wake up','musik'],
+    tags:['produkce','hudba'],
+    text:'Orchestrální soundtrack složil Don Davis. Ikonická je ale závěrečná scéna – "Wake Up" od Rage Against the Machine. Volba není náhodná: RATM je kapela otevřeně protestující proti systémové kontrole.' },
+
+  // ── POKRAČOVÁNÍ ──
+  { id:'reloaded',     keys:['reloaded','druhý','2','003','sequel','pokračování'],
+    tags:['film','série','reloaded'],
+    text:'Matrix Reloaded (2003) je filozoficky nejhustší díl – architekt, kauzalita, Merovingian, výběr bez výběru. Akčně spektakulární, narativně komplexní. Dálniční honička je dodnes referenční bod akčního kina.' },
+  { id:'revolutions',  keys:['revolutions','třetí','3','závěr','konec','válka','stroje'],
+    tags:['film','série','revolutions'],
+    text:'Matrix Revolutions (2003) přinesl závěr války mezi lidmi a stroji. Neo uzavírá dohodu se Zdroji – dá mu Smithe, stroje zastaví útok na Zion. Kontroverzní konec: mír, ne vítězství. Systém pokračuje dál.' },
+  { id:'resurrections', keys:['resurrections','čtvrtý','4','2021','lana','návrat','nový'],
+    tags:['film','série','resurrections'],
+    text:'Matrix Resurrections (2021) režírovala solo Lana Wachowski po smrti otce a přítele. Film je do značné míry meta-komentář na nutnost pokračování z komerčních důvodů. Neo a Trinity se vrátí – ale Matrix je jiný.' },
+
+  // ── FILOZOFIE ──
+  { id:'baudrillard',  keys:['baudrillard','simulakrum','filozofie','realita','iluze','pravda'],
+    tags:['filozofie'],
+    text:'Baudrillardova „Simulacra and Simulation" leží na Neově stole hned na začátku – jako vizitka záměru. Baudrillard sám ale s filmovou interpretací nesouhlasil. Tvrdil, že film nepochopil jeho tezi: nezobrazuje skutečnou realitu pod simulací, protože žádná skutečná realita neexistuje.' },
+  { id:'gnose',        keys:['gnóze','gnosticismus','demiurg','osvobození','duchovní'],
+    tags:['filozofie','náboženství'],
+    text:'Matrix silně rezonuje s gnosticismem: stroje jsou demiurgové (falešní stvořitelé), Matrix je hmotný svět-vězení, Neo je gnostický spasitel nesoucí pravé poznání (gnózi). Zion = duchovní plná realita.' },
+  { id:'platon',       keys:['platón','jeskyně','alegorie','stíny','ideje'],
+    tags:['filozofie'],
+    text:'Platónova Alegorie jeskyně: vězni v jeskyni považují stíny na zdi za realitu. Ten, kdo vyjde ven, vidí skutečné slunce – ale když se vrátí, ostatní ho považují za blázna. Neo je ten, kdo vyšel ven.' },
+
+  // ── ZAJÍMAVOSTI ──
+  { id:'will_smith',   keys:['will smith','odmítl','casting','jiný herec','alternativa'],
+    tags:['produkce','zajímavosti'],
+    text:'Will Smith odmítl roli Nea – točil tehdy Wild Wild West. Zpětně to označil za jednu ze svých největších chyb. Keanu Reeves navíc přijal nižší honorář, aby ušetřil na rozpočet pro speciální efekty.' },
+  { id:'trinitys_death', keys:['trinity smrt','zemřela','revolutions','konec trinity'],
+    tags:['postavy','trinity','revolutions'],
+    text:'Trinity umírá v Revolutions při přistání Nabuchadnezzaru v Matrixu. Její smrt je Neův emocionální konec – poté přijme svůj osud. V Resurrections se vrátí, ale Matrix ji přepsal.' },
+  { id:'seraph',       keys:['seraph','anděl','strážce','oracle strážce'],
+    tags:['postavy'],
+    text:'Seraph je strážce Oracle – exilový program, který sloužil Merovingianovi, než přešel k Oracle. Testuje každého, kdo chce k Oracle přijít, bojem. "You do not truly know someone until you fight them."' },
+  { id:'persephone',   keys:['persephone','merovingian žena','polibek'],
+    tags:['postavy'],
+    text:'Persephone je manželka Merovingiana – exilový program uvězněný ve vztahu bez skutečného citu. Pomůže Neovi výměnou za upřímný polibek, jaký nedostala od manžela už staletí. Metafora prázdnoty privilegovaného exilu.' },
+];
+
+// Dynamicky naučené věci od Dominika
+let learnedFacts = [];
+let queryCount = 0;
+
+function updateStats() {
+  document.getElementById('mem-facts').textContent = KB.length + learnedFacts.length;
+  document.getElementById('kb-count').textContent = KB.length + learnedFacts.length;
+  document.getElementById('learned-count').textContent = learnedFacts.length;
+  document.getElementById('query-count').textContent = queryCount;
+}
+updateStats();
+
+// ─── INFERENCE ENGINE ────────────────────────────────────────────────────────
+function tokenize(str) {
+  return str.toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g,'') // remove diacritics for matching
+    .replace(/[^\wáčďéěíňóřšťůúýžäöü\s]/g,' ')
+    .split(/\s+/).filter(Boolean);
+}
+
+function score(fact, tokens) {
+  let s = 0;
+  for (const t of tokens) {
+    for (const k of fact.keys) {
+      const kTokens = tokenize(k);
+      if (kTokens.includes(t)) s += 2;
+      else if (k.includes(t) || t.includes(k)) s += 1;
+    }
+  }
+  return s;
+}
+
+function findRelevantFacts(query, topN = 3) {
+  const tokens = tokenize(query);
+  // also check learned facts
+  const allFacts = [...KB, ...learnedFacts];
+  const scored = allFacts.map(f => ({ f, s: score(f, tokens) }))
+    .filter(x => x.s > 0)
+    .sort((a,b) => b.s - a.s);
+  return scored.slice(0, topN).map(x => ({ fact: x.f, score: x.s }));
+}
+
+// ─── RESPONSE COMPOSER ───────────────────────────────────────────────────────
+const CRITICAL_PREFIXES = [
+  'Podívej se na to takhle:',
+  'Analyticky vzato:',
+  'To je zajímavé, ale nepřesné.',
+  'Lidé si myslí, že... ale realita je jiná:',
+  'Pozorování číslo {n}:',
+  'Fakta bez romantizace:',
+  'Systém byl navržen tak, že...',
+];
+
+const CONNECTORS = [
+  ' Navíc,', ' A co je zajímavé:', ' Propojím to s jiným faktem:', ' Přidám kontext:', ' To doplňuje fakt, že',
+];
+
+const UNKNOWN_RESPONSES = [
+  'Tento signál není v mé databázi. Ale pokud mi to vysvětlíš, zapíšu to do paměti.',
+  'Neznám. To je přímo urážka mé analytické kapacity. Nauč mě to.',
+  'Databáze prázdná pro tento dotaz. Co víš ty?',
+  'Anomálie v dotazu: odpověď nenalezena. Rozšíř mou znalostní bázi.',
+  'Hmm. Tato část reality mi uniká. Jak to vidíš ty?',
+];
+
+let responseIndex = 0;
+
+function composeResponse(query, results) {
+  if (results.length === 0) return { text: UNKNOWN_RESPONSES[Math.floor(Math.random()*UNKNOWN_RESPONSES.length)], confidence: 0, critical: false };
+
+  const primary = results[0];
+  let text = '';
+  let critical = false;
+
+  // Critical framing for high-confidence answers
+  if (primary.score >= 3) {
+    const pfx = CRITICAL_PREFIXES[responseIndex % CRITICAL_PREFIXES.length].replace('{n}', responseIndex + 1);
+    responseIndex++;
+    text += pfx + ' ';
+    critical = true;
+  }
+
+  text += primary.fact.text;
+
+  // Combine with secondary fact if tags overlap
+  if (results.length >= 2) {
+    const secondary = results[1];
+    const tagOverlap = primary.fact.tags.some(t => secondary.fact.tags.includes(t));
+    const differentFact = primary.fact.id !== secondary.fact.id;
+    if (differentFact && (tagOverlap || secondary.score >= 2)) {
+      const connector = CONNECTORS[Math.floor(Math.random()*CONNECTORS.length)];
+      text += connector + ' ' + secondary.fact.text;
+    }
+  }
+
+  // Occasionally add a sharp closing observation
+  const closings = [
+    ' – to vše je součást téhož systému.',
+    ' Myslíš si, že to víš. Ale věděls to opravdu?',
+    ' Zapamatuj si to.',
+    '',
+    '',
+    '',
+  ];
+  text += closings[Math.floor(Math.random()*closings.length)];
+
+  const confidence = Math.min(100, primary.score * 18 + (results.length > 1 ? 15 : 0));
+  return { text, confidence, critical };
+}
+
+// ─── SPECIAL COMMANDS ────────────────────────────────────────────────────────
+function handleCommand(raw) {
+  const q = raw.toLowerCase().trim();
+  if (q === 'co víš' || q === 'co vis' || q === 'témata' || q === 'temata' || q === 'help') {
+    const tags = [...new Set(KB.flatMap(f => f.tags))].sort();
+    return `Analytické oblasti v mé databázi: ${tags.join(', ')}. Celkem ${KB.length + learnedFacts.length} faktů. Ptej se přirozeně.`;
+  }
+  if (q === 'seznam' || q === 'fakta') {
+    return `Znám ${KB.length} zabudovaných faktů a ${learnedFacts.length} tě naučených. Dotazů zpracováno: ${queryCount}.`;
+  }
+  return null;
+}
+
+// ─── UI FUNCTIONS ─────────────────────────────────────────────────────────────
+const chatEl = document.getElementById('chat');
+const inputEl = document.getElementById('user-input');
+const learnArea = document.getElementById('learn-area');
+const learnInput = document.getElementById('learn-input');
+let pendingQuestion = null;
+
+function addMsg(text, type='bot', label=null, confidence=null, critical=false) {
+  const w = document.createElement('div');
+  w.className = `msg ${type}${critical?' critical':''}`;
+
+  if (type !== 'system') {
+    const lbl = document.createElement('div');
+    lbl.className = 'msg-label';
+    lbl.textContent = label || (type==='user' ? '[ DOMINIK ]' : '[ TONDA ]');
+    w.appendChild(lbl);
+  }
+
+  const b = document.createElement('div');
+  b.className = 'msg-bubble';
+  b.textContent = text;
+  w.appendChild(b);
+
+  if (confidence !== null && type === 'bot') {
+    const bar = document.createElement('div');
+    bar.className = 'confidence-bar';
+    const fill = document.createElement('div');
+    fill.className = 'confidence-fill';
+    fill.style.width = '0%';
+    bar.appendChild(fill);
+    w.appendChild(bar);
+    setTimeout(() => { fill.style.width = confidence + '%'; }, 100);
+  }
+
+  chatEl.appendChild(w);
+  chatEl.scrollTop = chatEl.scrollHeight;
+}
+
+function typeMsg(text, type='bot', confidence=null, critical=false) {
+  return new Promise(resolve => {
+    const w = document.createElement('div');
+    w.className = `msg ${type}${critical?' critical':''}`;
+    const lbl = document.createElement('div');
+    lbl.className = 'msg-label';
+    lbl.textContent = '[ TONDA ]';
+    w.appendChild(lbl);
+    const b = document.createElement('div');
+    b.className = 'msg-bubble';
+    w.appendChild(b);
+    chatEl.appendChild(w);
+
+    let i = 0;
+    const iv = setInterval(() => {
+      b.textContent += text[i++];
+      chatEl.scrollTop = chatEl.scrollHeight;
+      if (i >= text.length) {
+        clearInterval(iv);
+        if (confidence !== null) {
+          const bar = document.createElement('div');
+          bar.className = 'confidence-bar';
+          const fill = document.createElement('div');
+          fill.className = 'confidence-fill';
+          fill.style.width = '0%';
+          bar.appendChild(fill);
+          w.appendChild(bar);
+          setTimeout(() => { fill.style.width = confidence + '%'; }, 100);
+        }
+        resolve();
+      }
+    }, 18);
+  });
+}
+
+function showTyping() {
+  const d = document.createElement('div');
+  d.className = 'msg bot'; d.id = 'typing-indicator';
+  d.innerHTML = '<div class="typing-indicator"><span></span><span></span><span></span></div>';
+  chatEl.appendChild(d); chatEl.scrollTop = chatEl.scrollHeight;
+}
+function hideTyping() {
+  const d = document.getElementById('typing-indicator');
+  if (d) d.remove();
+}
+
+// ─── MAIN HANDLER ─────────────────────────────────────────────────────────────
+async function handleInput() {
+  const raw = inputEl.value.trim();
+  if (!raw || pendingQuestion !== null) return;
+  inputEl.value = '';
+  queryCount++;
+  updateStats();
+
+  addMsg(raw, 'user');
+
+  if (raw.toLowerCase() === 'konec') {
+    showTyping();
+    await delay(600); hideTyping();
+    await typeMsg('Konec relace. Pamatuj, Dominiku – Matrix se nezastaví, protože ty odejdeš. Systém pokračuje.', 'bot', null, true);
+    setTimeout(() => {
+      addMsg('─── SPOJENÍ UKONČENO ───', 'system');
+      inputEl.disabled = true;
+      document.getElementById('send-btn').disabled = true;
+    }, 500);
+    return;
+  }
+
+  const cmd = handleCommand(raw);
+  if (cmd) {
+    showTyping(); await delay(400); hideTyping();
+    await typeMsg(cmd, 'bot', 100, false);
+    return;
+  }
+
+  const results = findRelevantFacts(raw);
+  const { text, confidence, critical } = composeResponse(raw, results);
+
+  showTyping();
+  await delay(400 + Math.random() * 500);
+  hideTyping();
+
+  if (confidence === 0) {
+    await typeMsg(text, 'bot', null, true);
+    pendingQuestion = raw.toLowerCase().trim();
+    learnArea.style.display = 'flex';
+    learnInput.focus();
+  } else {
+    await typeMsg(text, 'bot', confidence, critical);
+  }
+}
+
+function handleLearn() {
+  const answer = learnInput.value.trim();
+  if (!answer || pendingQuestion === null) return;
+
+  // Vytvoř nový fakt z odpovědi
+  const newFact = {
+    id: 'learned_' + Date.now(),
+    keys: pendingQuestion.split(' ').filter(w => w.length > 2),
+    tags: ['naučené'],
+    text: answer,
+    learned: true,
+  };
+  learnedFacts.push(newFact);
+  learnInput.value = '';
+  learnArea.style.display = 'none';
+  updateStats();
+
+  addMsg(`Fakt zapsán do paměti. Klíčová slova: [${newFact.keys.join(', ')}]. Příště tento dotaz zvládnu analyticky.`, 'bot', null, null, false);
+
+  const w = document.createElement('div');
+  w.style.cssText = 'font-size:9px;color:#003b00;padding:0 0 4px 2px;align-self:flex-start';
+  w.textContent = `ULOŽENO: "${pendingQuestion}" → ${answer.substring(0,40)}...`;
+  chatEl.appendChild(w);
+  chatEl.scrollTop = chatEl.scrollHeight;
+
+  pendingQuestion = null;
+}
+
+function delay(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+inputEl.addEventListener('keydown', e => { if (e.key==='Enter') handleInput(); });
+document.getElementById('send-btn').addEventListener('click', handleInput);
+learnInput.addEventListener('keydown', e => { if (e.key==='Enter') handleLearn(); });
+document.getElementById('learn-btn').addEventListener('click', handleLearn);
+
+// ─── BOOT ─────────────────────────────────────────────────────────────────────
+async function boot() {
+  await delay(200);
+  addMsg('▓ INICIALIZACE KRITICKÉ ANALÝZY... ▓', 'system');
+  await delay(500);
+  addMsg(`▓ ZNALOSTNÍ DATABÁZE: ${KB.length} FAKTŮ NAČTENO ▓`, 'system');
+  await delay(400);
+  await typeMsg('Probudil ses, Dominiku. Jsem Tonda – analytická entita bez sentimentu.', 'bot', null, false);
+  await delay(200);
+  await typeMsg('Znám Matrix do hloubky. Ne jako fanoušek. Jako systém, který ho studuje. Ptej se.', 'bot', 100, true);
+  await delay(100);
+  addMsg('─── TIP: zkus "co je matrix", "kdo je agent smith", "filozofie", "co víš" ───', 'system');
+  updateStats();
+}
+boot();
+</script>
+</body>
+</html>
